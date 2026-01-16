@@ -1,4 +1,3 @@
-
 import React, { useRef, useState } from 'react';
 
 interface UrineAnalysisViewProps {
@@ -6,25 +5,64 @@ interface UrineAnalysisViewProps {
   onComplete: () => void;
 }
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
 const UrineAnalysisView: React.FC<UrineAnalysisViewProps> = ({ onNext, onComplete }) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handlePickPhoto = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const validateImage = async (file: File) => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      throw new Error('Image exceeds 10MB limit. Please use a smaller photo.');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_URL}/validate-image`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.detail || 'Unable to validate image.');
+    }
+
+    if (!data.accepted) {
+      throw new Error(data.reason || 'Photo must show tongue or urine in toilet.');
+    }
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    setError('');
+    setIsUploading(true);
+
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
         setPreviewUrl(reader.result);
       }
-      onComplete();
     };
     reader.readAsDataURL(file);
+
+    try {
+      await validateImage(file);
+      onComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -43,12 +81,11 @@ const UrineAnalysisView: React.FC<UrineAnalysisViewProps> = ({ onNext, onComplet
         <p className="text-center text-slate-500 px-4">
           Upload a clear tongue or urine photo to generate the report.
         </p>
-        {/* Hero Illustration */}
         <div className="relative w-full aspect-[4/5] bg-slate-900 rounded-[40px] overflow-hidden border-4 border-slate-800 shadow-2xl">
           {previewUrl ? (
             <img
               src={previewUrl}
-              alt="Urine Upload Preview"
+              alt="Upload Preview"
               className="w-full h-full object-cover"
             />
           ) : (
@@ -68,13 +105,21 @@ const UrineAnalysisView: React.FC<UrineAnalysisViewProps> = ({ onNext, onComplet
                 Scanning Color Spectrum
             </div>
           </div>
+
+          {error && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 w-[85%] rounded-2xl border border-rose-200 bg-rose-50/95 px-4 py-3 text-sm text-rose-600 shadow-lg">
+              {error}
+            </div>
+          )}
         </div>
+
         <div className="flex items-center justify-center">
           <button
             onClick={handlePickPhoto}
-            className="px-5 py-3 rounded-full bg-white/90 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 text-sm font-semibold border border-slate-200 dark:border-slate-800"
+            disabled={isUploading}
+            className="px-5 py-3 rounded-full bg-white/90 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 text-sm font-semibold border border-slate-200 dark:border-slate-800 disabled:opacity-70"
           >
-            Upload Photo
+            {isUploading ? 'Validating...' : 'Upload Photo'}
           </button>
           <input
             ref={fileInputRef}
@@ -85,7 +130,6 @@ const UrineAnalysisView: React.FC<UrineAnalysisViewProps> = ({ onNext, onComplet
           />
         </div>
 
-        {/* Index Card */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold">Hydration Index</h2>
@@ -102,7 +146,7 @@ const UrineAnalysisView: React.FC<UrineAnalysisViewProps> = ({ onNext, onComplet
                 <span className="text-lg font-mono font-bold">1.025</span>
               </div>
             </div>
-            
+
             <div className="h-10 w-full flex rounded-2xl overflow-hidden mb-4 p-1 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
               <div className="h-full flex-1 bg-[#F8FAFC]"></div>
               <div className="h-full flex-1 bg-[#FEF9C3]"></div>
@@ -114,7 +158,7 @@ const UrineAnalysisView: React.FC<UrineAnalysisViewProps> = ({ onNext, onComplet
               <div className="h-full flex-1 bg-[#CA8A04]"></div>
               <div className="h-full flex-1 bg-[#854D0E]"></div>
             </div>
-            
+
             <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
               <span>Hydrated</span>
               <span>Optimal</span>
@@ -124,7 +168,6 @@ const UrineAnalysisView: React.FC<UrineAnalysisViewProps> = ({ onNext, onComplet
           </div>
         </section>
 
-        {/* Alert Card */}
         <section className="p-5 rounded-3xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm">
           <div className="flex items-start gap-4">
             <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">

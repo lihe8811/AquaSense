@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 import secrets
@@ -7,10 +7,14 @@ from pathlib import Path
 
 from services.auth_service import hash_password, verify_password
 from services.gemini_service import analyze_health_image
+from services.qwen_service import classify_image
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "hydrascan.db"
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # ~10MB fits typical 12-48MP mobile uploads
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
 app = FastAPI()
 
 app.add_middleware(
@@ -79,6 +83,12 @@ class AnalyzeResponse(BaseModel):
     recommendation: str
 
 
+class ValidateResponse(BaseModel):
+    accepted: bool
+    label: str
+    reason: str
+
+
 @app.on_event("startup")
 def startup() -> None:
     init_db()
@@ -120,6 +130,24 @@ def login(payload: LoginRequest) -> AuthResponse:
             access_token=access_token,
             user=UserOut(id=row["id"], name=row["name"], email=row["email"]),
         )
+
+
+@app.post("/validate-image", response_model=ValidateResponse)
+async def validate_image(file: UploadFile = File(...)) -> ValidateResponse:
+    if file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported image type")
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Image exceeds 10MB limit")
+
+    result = classify_image(content, file.content_type)
+    label = result.get("label", "other")
+    reason = result.get("reason", "Unclear image")
+    return ValidateResponse(
+        accepted=label in {"tongue", "urine"},
+        label=label,
+        reason=reason,
+    )
 
 
 @app.post("/analyze/{scan_type}", response_model=AnalyzeResponse)

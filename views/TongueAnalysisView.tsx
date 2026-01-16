@@ -1,4 +1,3 @@
-
 import React, { useRef, useState } from 'react';
 
 interface TongueAnalysisViewProps {
@@ -7,30 +6,65 @@ interface TongueAnalysisViewProps {
   startAtResult?: boolean;
 }
 
-const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onComplete, startAtResult }) => {
-  const [step, setStep] = useState<'scan' | 'result'>(startAtResult ? 'result' : 'scan');
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
-  const handleScan = () => {
-    onComplete();
-  };
+const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onComplete, startAtResult }) => {
+  const [step] = useState<'scan' | 'result'>(startAtResult ? 'result' : 'scan');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handlePickPhoto = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const validateImage = async (file: File) => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      throw new Error('Image exceeds 10MB limit. Please use a smaller photo.');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_URL}/validate-image`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.detail || 'Unable to validate image.');
+    }
+
+    if (!data.accepted) {
+      throw new Error(data.reason || 'Photo must show tongue or urine in toilet.');
+    }
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    setError('');
+    setIsUploading(true);
+
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
         setPreviewUrl(reader.result);
       }
-      onComplete();
     };
     reader.readAsDataURL(file);
+
+    try {
+      await validateImage(file);
+      onComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   if (step === 'scan') {
@@ -45,13 +79,13 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onCompl
           <p className="text-center text-slate-500 mb-6 px-4">
             Upload a clear tongue or urine photo to generate the report.
           </p>
-          
+
           <div className="relative w-full aspect-[3/4] rounded-[40px] overflow-hidden bg-slate-900 border-4 border-primary/20 shadow-2xl">
             {previewUrl ? (
               <img
                 src={previewUrl}
                 className="w-full h-full object-cover"
-                alt="Tongue Upload Preview"
+                alt="Upload Preview"
               />
             ) : (
               <img
@@ -60,27 +94,32 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onCompl
                 alt="Tongue View"
               />
             )}
-            {/* Overlay */}
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-64 h-80 border-2 border-primary/50 rounded-full border-dashed"></div>
             </div>
-            
-            {/* Scan Line */}
+
             <div className="absolute top-0 left-0 w-full h-1 bg-primary/40 shadow-[0_0_15px_rgba(13,148,136,0.8)] scan-line"></div>
 
             <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-primary"></div>
             <div className="absolute top-6 right-6 w-8 h-8 border-t-2 border-r-2 border-primary"></div>
             <div className="absolute bottom-6 left-6 w-8 h-8 border-b-2 border-l-2 border-primary"></div>
             <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-primary"></div>
+
+            {error && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 w-[85%] rounded-2xl border border-rose-200 bg-rose-50/95 px-4 py-3 text-sm text-rose-600 shadow-lg">
+                {error}
+              </div>
+            )}
           </div>
 
           <div className="mt-auto py-8">
             <div className="flex items-center justify-center">
               <button
                 onClick={handlePickPhoto}
-                className="px-5 py-3 rounded-full bg-white/90 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 text-sm font-semibold border border-slate-200 dark:border-slate-800"
+                disabled={isUploading}
+                className="px-5 py-3 rounded-full bg-white/90 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 text-sm font-semibold border border-slate-200 dark:border-slate-800 disabled:opacity-70"
               >
-                Upload Photo
+                {isUploading ? 'Validating...' : 'Upload Photo'}
               </button>
             </div>
             <input
@@ -107,7 +146,6 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onCompl
       </header>
 
       <main className="px-6 space-y-8 py-4">
-        {/* Navigation Tabs */}
         <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto no-scrollbar">
           <button className="pb-3 px-4 text-primary border-b-2 border-primary font-bold whitespace-nowrap">Overview</button>
           <button className="pb-3 px-4 text-slate-400 font-medium whitespace-nowrap">Texture</button>
@@ -115,19 +153,17 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onCompl
           <button className="pb-3 px-4 text-slate-400 font-medium whitespace-nowrap">Coating</button>
         </div>
 
-        {/* Hero Image */}
         <div className="relative w-full aspect-[4/5] bg-slate-200 dark:bg-slate-800 rounded-3xl overflow-hidden border-4 border-primary/10 shadow-lg">
-           <img 
-            alt="Tongue Scan Result" 
-            className="w-full h-full object-cover" 
-            src="https://picsum.photos/seed/tongue-result/800/1000" 
-           />
-           <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent"></div>
-           <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-primary/60 animate-pulse"></div>
-           <div className="absolute bottom-1/4 left-1/3 w-3 h-3 rounded-full bg-orange-400/60 animate-pulse"></div>
+          <img
+            alt="Tongue Scan Result"
+            className="w-full h-full object-cover"
+            src="https://picsum.photos/seed/tongue-result/800/1000"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent"></div>
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-primary/60 animate-pulse"></div>
+          <div className="absolute bottom-1/4 left-1/3 w-3 h-3 rounded-full bg-orange-400/60 animate-pulse"></div>
         </div>
 
-        {/* Hydration Map */}
         <section>
           <h2 className="text-xl font-bold mb-6">Hydration Map</h2>
           <div className="relative py-8 flex justify-center items-center bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700">
@@ -164,7 +200,6 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onCompl
           </div>
         </section>
 
-        {/* Analysis Card */}
         <section className="p-5 rounded-3xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm">
           <div className="flex items-start gap-4">
             <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shrink-0">

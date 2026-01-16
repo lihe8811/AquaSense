@@ -2,3 +2,5 @@ fastapi
 uvicorn[standard]
 google-generativeai
 email-validator
+openai
+python-multipart
