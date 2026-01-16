@@ -1,10 +1,14 @@
 
 export enum AppScreen {
   ONBOARDING = 'ONBOARDING',
+  LOGIN = 'LOGIN',
+  SIGNUP = 'SIGNUP',
   SUMMARY = 'SUMMARY',
   TONGUE_ANALYSIS = 'TONGUE_ANALYSIS',
   URINE_ANALYSIS = 'URINE_ANALYSIS',
   RECOMMENDATIONS = 'RECOMMENDATIONS',
+  HISTORY = 'HISTORY',
+  REPORT = 'REPORT',
   PROFILE = 'PROFILE'
 }
 
@@ -37,4 +41,10 @@ export interface Drink {
   imageUrl: string;
   benefit: string;
   isBestMatch?: boolean;
+}
+
+export interface AuthSession {
+  token: string;
+  email: string;
+  name?: string;
 }

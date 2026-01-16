@@ -3,9 +3,10 @@ import React from 'react';
 
 interface OnboardingViewProps {
   onStart: () => void;
+  onLogin: () => void;
 }
 
-const OnboardingView: React.FC<OnboardingViewProps> = ({ onStart }) => {
+const OnboardingView: React.FC<OnboardingViewProps> = ({ onStart, onLogin }) => {
   return (
     <div className="min-h-screen bg-teal-50 dark:bg-slate-950 flex flex-col relative overflow-hidden">
       <div className="fixed inset-0 pointer-events-none">
@@ -87,7 +88,7 @@ const OnboardingView: React.FC<OnboardingViewProps> = ({ onStart }) => {
           <div className="flex flex-col items-center gap-2">
             <p className="text-slate-500 dark:text-slate-400 text-sm">
               Already have an account? 
-              <button className="text-primary font-bold ml-1 hover:underline">Log In</button>
+              <button onClick={onLogin} className="text-primary font-bold ml-1 hover:underline">Log In</button>
             </p>
           </div>
         </div>
