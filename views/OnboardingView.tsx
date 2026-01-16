@@ -19,7 +19,7 @@ const OnboardingView: React.FC<OnboardingViewProps> = ({ onStart, onLogin }) => 
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
             <span className="material-symbols-outlined text-white text-2xl">water_drop</span>
           </div>
-          <span className="font-bold text-xl tracking-tight text-slate-800 dark:text-white">HydraScan</span>
+          <span className="font-bold text-xl tracking-tight text-slate-800 dark:text-white">AquaSense</span>
         </div>
 
         <div className="relative w-full max-w-sm aspect-square flex items-center justify-center my-8">

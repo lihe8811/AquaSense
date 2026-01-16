@@ -50,7 +50,7 @@ const AuthView: React.FC<AuthViewProps> = ({ mode, onSubmit, onToggleMode, onBac
             <span className="material-symbols-outlined text-white text-2xl">water_drop</span>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-teal-500 font-semibold">HydraScan</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-teal-500 font-semibold">AquaSense</p>
             <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
               {isSignup ? 'Create Account' : 'Welcome Back'}
             </h1>

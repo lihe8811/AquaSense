@@ -1,5 +1,5 @@
 {
-  "name": "HydraScan AI",
+  "name": "AquaSense AI",
   "description": "An advanced AI-powered hydration tracking and biometric analysis app that uses tongue and urine scans to provide deep wellness insights.",
   "requestFramePermissions": [
     "camera"

@@ -61,7 +61,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ session, onOpenHistory, onLog
           </div>
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
-              {session.name || 'HydraScan User'}
+              {session.name || 'AquaSense User'}
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">{session.email}</p>
           </div>
