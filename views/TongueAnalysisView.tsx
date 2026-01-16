@@ -1,41 +1,65 @@
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 interface TongueAnalysisViewProps {
   onNext: () => void;
-  onBack: () => void;
+  onComplete: () => void;
+  startAtResult?: boolean;
 }
 
-const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onBack }) => {
-  const [step, setStep] = useState<'scan' | 'result'>('scan');
+const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onComplete, startAtResult }) => {
+  const [step, setStep] = useState<'scan' | 'result'>(startAtResult ? 'result' : 'scan');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleScan = () => {
-    // Simulate a scan duration
-    setStep('result');
+    onComplete();
+  };
+
+  const handlePickPhoto = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setPreviewUrl(reader.result);
+      }
+      onComplete();
+    };
+    reader.readAsDataURL(file);
   };
 
   if (step === 'scan') {
     return (
       <div className="flex flex-1 flex-col bg-background-light dark:bg-background-dark">
         <header className="px-6 py-4 flex items-center justify-between">
-          <button onClick={onBack} className="p-2 -ml-2 text-slate-500">
-            <span className="material-icons-round">chevron_left</span>
-          </button>
-          <h1 className="text-xl font-bold">Tongue Scan</h1>
+          <h1 className="text-xl font-bold">Tongue or Urine Test</h1>
           <div className="w-10"></div>
         </header>
 
         <main className="flex-1 flex flex-col px-6 pb-24">
           <p className="text-center text-slate-500 mb-6 px-4">
-            Center your tongue within the frame and ensure good lighting.
+            Upload a clear tongue or urine photo to generate the report.
           </p>
           
           <div className="relative w-full aspect-[3/4] rounded-[40px] overflow-hidden bg-slate-900 border-4 border-primary/20 shadow-2xl">
-            <img 
-              src="https://picsum.photos/seed/tongue/600/800" 
-              className="w-full h-full object-cover opacity-60" 
-              alt="Tongue View" 
-            />
+            {previewUrl ? (
+              <img
+                src={previewUrl}
+                className="w-full h-full object-cover"
+                alt="Tongue Upload Preview"
+              />
+            ) : (
+              <img
+                src="https://picsum.photos/seed/tongue/600/800"
+                className="w-full h-full object-cover opacity-60"
+                alt="Tongue View"
+              />
+            )}
             {/* Overlay */}
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-64 h-80 border-2 border-primary/50 rounded-full border-dashed"></div>
@@ -51,14 +75,21 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onBack 
           </div>
 
           <div className="mt-auto py-8">
-            <button 
-              onClick={handleScan}
-              className="w-20 h-20 rounded-full border-4 border-slate-200 dark:border-slate-800 p-1 mx-auto block"
-            >
-              <div className="w-full h-full rounded-full bg-primary flex items-center justify-center">
-                <span className="material-icons-round text-white text-3xl">camera</span>
-              </div>
-            </button>
+            <div className="flex items-center justify-center">
+              <button
+                onClick={handlePickPhoto}
+                className="px-5 py-3 rounded-full bg-white/90 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 text-sm font-semibold border border-slate-200 dark:border-slate-800"
+              >
+                Upload Photo
+              </button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
           </div>
         </main>
       </div>

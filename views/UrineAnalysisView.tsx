@@ -1,17 +1,37 @@
 
-import React from 'react';
+import React, { useRef, useState } from 'react';
 
 interface UrineAnalysisViewProps {
   onNext: () => void;
-  onBack: () => void;
+  onComplete: () => void;
 }
 
-const UrineAnalysisView: React.FC<UrineAnalysisViewProps> = ({ onNext, onBack }) => {
+const UrineAnalysisView: React.FC<UrineAnalysisViewProps> = ({ onNext, onComplete }) => {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handlePickPhoto = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setPreviewUrl(reader.result);
+      }
+      onComplete();
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="flex flex-1 flex-col bg-background-light dark:bg-background-dark pb-24 overflow-y-auto no-scrollbar">
       <header className="px-6 py-4 flex items-center justify-between sticky top-0 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md z-10">
         <div className="flex flex-col">
-          <h1 className="text-2xl font-bold">Urine Analysis</h1>
+          <h1 className="text-2xl font-bold">Tongue or Urine Test</h1>
           <p className="text-xs text-slate-500">REF: UA-77210405</p>
         </div>
         <div className="flex gap-2">
@@ -20,15 +40,26 @@ const UrineAnalysisView: React.FC<UrineAnalysisViewProps> = ({ onNext, onBack })
       </header>
 
       <main className="px-6 space-y-8 py-4">
+        <p className="text-center text-slate-500 px-4">
+          Upload a clear tongue or urine photo to generate the report.
+        </p>
         {/* Hero Illustration */}
         <div className="relative w-full aspect-[4/5] bg-slate-900 rounded-[40px] overflow-hidden border-4 border-slate-800 shadow-2xl">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-48 h-72 bg-gradient-to-b from-yellow-200 to-amber-500/80 rounded-b-full rounded-t-lg relative border-2 border-white/20 shadow-[0_0_50px_rgba(245,158,11,0.2)] overflow-hidden">
-               <div className="absolute top-1/4 left-1/4 w-1 h-1 bg-white/40 rounded-full animate-ping"></div>
-               <div className="absolute top-1/2 right-1/3 w-1.5 h-1.5 bg-white/20 rounded-full animate-pulse"></div>
+          {previewUrl ? (
+            <img
+              src={previewUrl}
+              alt="Urine Upload Preview"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-48 h-72 bg-gradient-to-b from-yellow-200 to-amber-500/80 rounded-b-full rounded-t-lg relative border-2 border-white/20 shadow-[0_0_50px_rgba(245,158,11,0.2)] overflow-hidden">
+                 <div className="absolute top-1/4 left-1/4 w-1 h-1 bg-white/40 rounded-full animate-ping"></div>
+                 <div className="absolute top-1/2 right-1/3 w-1.5 h-1.5 bg-white/20 rounded-full animate-pulse"></div>
+              </div>
             </div>
-          </div>
-          
+          )}
+
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
             <div className="w-24 h-24 border border-primary/40 rounded-full flex items-center justify-center animate-pulse">
               <div className="w-16 h-16 border border-primary/60 rounded-full"></div>
@@ -37,6 +68,21 @@ const UrineAnalysisView: React.FC<UrineAnalysisViewProps> = ({ onNext, onBack })
                 Scanning Color Spectrum
             </div>
           </div>
+        </div>
+        <div className="flex items-center justify-center">
+          <button
+            onClick={handlePickPhoto}
+            className="px-5 py-3 rounded-full bg-white/90 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 text-sm font-semibold border border-slate-200 dark:border-slate-800"
+          >
+            Upload Photo
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
         </div>
 
         {/* Index Card */}

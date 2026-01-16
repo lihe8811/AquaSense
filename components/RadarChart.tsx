@@ -14,9 +14,9 @@ interface RadarChartProps {
 
 const RadarChart: React.FC<RadarChartProps> = ({ metrics }) => {
   // Simple calculation for polygon points based on 0-10 scale
-  const scale = 8; // Max radius
   const cx = 100;
   const cy = 100;
+  const angles = [0, 60, 120, 180, 240, 300];
 
   const getPoint = (value: number, angleDeg: number) => {
     const r = (value / 10) * 80;
@@ -24,22 +24,30 @@ const RadarChart: React.FC<RadarChartProps> = ({ metrics }) => {
     return `${cx + r * Math.cos(angleRad)},${cy + r * Math.sin(angleRad)}`;
   };
 
+  const getHexPoints = (radius: number) =>
+    angles
+      .map((angleDeg) => {
+        const angleRad = (angleDeg - 90) * (Math.PI / 180);
+        return `${cx + radius * Math.cos(angleRad)},${cy + radius * Math.sin(angleRad)}`;
+      })
+      .join(' ');
+
   const points = [
-    getPoint(metrics.mineral, 0),
-    getPoint(metrics.fluid, 60),
-    getPoint(metrics.electrolytes, 120),
-    getPoint(metrics.detox, 180),
-    getPoint(metrics.balance, 240),
-    getPoint(metrics.retention, 300),
+    getPoint(metrics.mineral, angles[0]),
+    getPoint(metrics.fluid, angles[1]),
+    getPoint(metrics.electrolytes, angles[2]),
+    getPoint(metrics.detox, angles[3]),
+    getPoint(metrics.balance, angles[4]),
+    getPoint(metrics.retention, angles[5]),
   ].join(' ');
 
   return (
     <div className="relative w-full aspect-square max-w-[300px] mx-auto flex items-center justify-center">
       <svg className="w-full h-full" viewBox="0 0 200 200">
         {/* Background Grids */}
-        <polygon className="stroke-slate-200 dark:stroke-slate-700 fill-none" points="100,20 180,60 180,140 100,180 20,140 20,60" />
-        <polygon className="stroke-slate-200 dark:stroke-slate-700 fill-none" points="100,40 160,70 160,130 100,160 40,130 40,70" />
-        <polygon className="stroke-slate-200 dark:stroke-slate-700 fill-none" points="100,60 140,80 140,120 100,140 60,120 60,80" />
+        <polygon className="stroke-slate-200 dark:stroke-slate-700 fill-none" points={getHexPoints(80)} />
+        <polygon className="stroke-slate-200 dark:stroke-slate-700 fill-none" points={getHexPoints(60)} />
+        <polygon className="stroke-slate-200 dark:stroke-slate-700 fill-none" points={getHexPoints(40)} />
         <line className="stroke-slate-100 dark:stroke-slate-800" x1="100" y1="20" x2="100" y2="180" />
         <line className="stroke-slate-100 dark:stroke-slate-800" x1="20" y1="60" x2="180" y2="140" />
         <line className="stroke-slate-100 dark:stroke-slate-800" x1="180" y1="60" x2="20" y2="140" />
