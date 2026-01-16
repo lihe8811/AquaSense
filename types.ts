@@ -44,6 +44,7 @@ export interface Drink {
 }
 
 export interface AuthSession {
+  id?: number;
   token: string;
   email: string;
   name?: string;

@@ -43,6 +43,7 @@ const signup = async (payload: { name: string; email: string; password: string }
   });
   const data = await handleResponse(response);
   return {
+    id: data.user.id,
     token: data.access_token,
     email: data.user.email,
     name: data.user.name,
@@ -57,6 +58,7 @@ const login = async (payload: { email: string; password: string }): Promise<Auth
   });
   const data = await handleResponse(response);
   return {
+    id: data.user.id,
     token: data.access_token,
     email: data.user.email,
     name: data.user.name,
@@ -147,6 +149,7 @@ const App: React.FC = () => {
             onNext={() => setScreen(AppScreen.URINE_ANALYSIS)}
             onComplete={() => setScreen(AppScreen.HISTORY)}
             startAtResult={tongueStartAtResult}
+            userId={session?.id}
           />
         );
       case AppScreen.URINE_ANALYSIS:
@@ -154,6 +157,7 @@ const App: React.FC = () => {
           <UrineAnalysisView
             onNext={() => setScreen(AppScreen.RECOMMENDATIONS)}
             onComplete={() => setScreen(AppScreen.HISTORY)}
+            userId={session?.id}
           />
         );
       case AppScreen.RECOMMENDATIONS:

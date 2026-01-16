@@ -4,12 +4,23 @@ interface TongueAnalysisViewProps {
   onNext: () => void;
   onComplete: () => void;
   startAtResult?: boolean;
+  userId?: number;
 }
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
-const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onComplete, startAtResult }) => {
+const createTestId = () =>
+  (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+
+const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({
+  onNext,
+  onComplete,
+  startAtResult,
+  userId,
+}) => {
   const [step] = useState<'scan' | 'result'>(startAtResult ? 'result' : 'scan');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -20,15 +31,21 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onCompl
     fileInputRef.current?.click();
   };
 
-  const validateImage = async (file: File) => {
+  const uploadAndValidate = async (file: File) => {
+    if (!userId) {
+      throw new Error('Please log in to upload a photo.');
+    }
     if (file.size > MAX_UPLOAD_BYTES) {
-      throw new Error('Image exceeds 10MB limit. Please use a smaller photo.');
+      throw new Error('Image exceeds 15MB limit. Please use a smaller photo.');
     }
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('user_id', String(userId));
+    formData.append('test_id', createTestId());
+    formData.append('scan_type', 'tongue');
 
-    const response = await fetch(`${API_URL}/validate-image`, {
+    const response = await fetch(`${API_URL}/upload-image`, {
       method: 'POST',
       body: formData,
     });
@@ -58,7 +75,7 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({ onNext, onCompl
     reader.readAsDataURL(file);
 
     try {
-      await validateImage(file);
+      await uploadAndValidate(file);
       onComplete();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.');

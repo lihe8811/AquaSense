@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
+from dotenv import load_dotenv
 import secrets
 import sqlite3
 from pathlib import Path
@@ -8,12 +9,15 @@ from pathlib import Path
 from services.auth_service import hash_password, verify_password
 from services.gemini_service import analyze_health_image
 from services.qwen_service import classify_image
+from services.oss_service import upload_bytes
 
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR.parent / ".env")
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "hydrascan.db"
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # ~10MB fits typical 12-48MP mobile uploads
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # ~15MB fits typical 12-48MP mobile uploads
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
 app = FastAPI()
 
@@ -47,6 +51,12 @@ def init_db() -> None:
             """
         )
         conn.commit()
+
+
+def _sanitize_path_part(value: str, label: str) -> str:
+    if not value or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for ch in value):
+        raise HTTPException(status_code=400, detail=f"Invalid {label}")
+    return value
 
 
 class SignupRequest(BaseModel):
@@ -87,6 +97,7 @@ class ValidateResponse(BaseModel):
     accepted: bool
     label: str
     reason: str
+    object_key: str | None = None
 
 
 @app.on_event("startup")
@@ -132,22 +143,48 @@ def login(payload: LoginRequest) -> AuthResponse:
         )
 
 
-@app.post("/validate-image", response_model=ValidateResponse)
-async def validate_image(file: UploadFile = File(...)) -> ValidateResponse:
+@app.post("/upload-image", response_model=ValidateResponse)
+async def upload_image(
+    file: UploadFile = File(...),
+    user_id: str = Form(...),
+    test_id: str = Form(...),
+    scan_type: str | None = Form(None),
+) -> ValidateResponse:
     if file.content_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported image type")
+
+    user_id = _sanitize_path_part(user_id, "user_id")
+    test_id = _sanitize_path_part(test_id, "test_id")
+
+    if scan_type and scan_type not in {"tongue", "urine"}:
+        raise HTTPException(status_code=400, detail="Invalid scan type")
+
     content = await file.read()
     if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Image exceeds 10MB limit")
+        raise HTTPException(status_code=413, detail="Image exceeds 15MB limit")
 
     result = classify_image(content, file.content_type)
     label = result.get("label", "other")
     reason = result.get("reason", "Unclear image")
-    return ValidateResponse(
-        accepted=label in {"tongue", "urine"},
-        label=label,
-        reason=reason,
-    )
+
+    if label not in {"tongue", "urine"}:
+        return ValidateResponse(accepted=False, label=label, reason=reason)
+
+    if scan_type and label != scan_type:
+        return ValidateResponse(accepted=False, label=label, reason=f"Expected a {scan_type} photo")
+
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXTS:
+        ext = ".jpg" if file.content_type == "image/jpeg" else ".png" if file.content_type == "image/png" else ".webp"
+
+    object_key = f"{user_id}/{test_id}/upload/{label}{ext}"
+
+    try:
+        upload_bytes(object_key, content, file.content_type)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"OSS upload failed: {exc}") from exc
+
+    return ValidateResponse(accepted=True, label=label, reason="Accepted", object_key=object_key)
 
 
 @app.post("/analyze/{scan_type}", response_model=AnalyzeResponse)
