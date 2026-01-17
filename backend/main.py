@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr
 from dotenv import load_dotenv
 import secrets
 import sqlite3
+import json
 from pathlib import Path
 
 from services.auth_service import hash_password, verify_password
@@ -193,3 +194,21 @@ def analyze(scan_type: str, payload: AnalyzeRequest) -> AnalyzeResponse:
         raise HTTPException(status_code=400, detail="Invalid scan type")
     result = analyze_health_image(payload.image, scan_type)
     return AnalyzeResponse(**result)
+
+
+@app.get("/overview")
+def get_overview():
+    file_path = DATA_DIR / "overview.json"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Overview data not found")
+    with open(file_path, "r") as f:
+        return json.load(f)
+
+
+@app.get("/report")
+def get_report():
+    file_path = DATA_DIR / "report.json"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Report data not found")
+    with open(file_path, "r") as f:
+        return json.load(f)

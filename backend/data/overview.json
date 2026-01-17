@@ -1,0 +1,36 @@
+{
+  "metrics": {
+    "overallScore": 72,
+    "targetScore": 85,
+    "mineral": 8.1,
+    "fluid": 7.5,
+    "electrolytes": 6.8,
+    "detox": 9.0,
+    "balance": 8.4,
+    "retention": 5.2,
+    "intracellular": 78,
+    "extracellular": 64
+  },
+  "recommended_drinks": [
+    {
+      "id": "1",
+      "name": "Cucumber Mint",
+      "description": "Cooling and refreshing hydration with essential minerals.",
+      "tags": ["Cooling", "Low Calorie"],
+      "price": "$4.50",
+      "imageUrl": "https://picsum.photos/seed/cucumber/200/200",
+      "benefit": "Mineral",
+      "isBestMatch": true
+    },
+    {
+      "id": "2",
+      "name": "Coconut Water",
+      "description": "Natural electrolytes for rapid rehydration.",
+      "tags": ["Electrolytes", "Potassium"],
+      "price": "$5.00",
+      "imageUrl": "https://picsum.photos/seed/coconut/200/200",
+      "benefit": "Electrolytes",
+      "isBestMatch": false
+    }
+  ]
+}
