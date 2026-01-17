@@ -10,7 +10,9 @@ from pathlib import Path
 from services.auth_service import hash_password, verify_password
 from services.gemini_service import analyze_health_image
 from services.qwen_service import classify_image
-from services.oss_service import upload_bytes
+from services.oss_service import upload_bytes, download_bytes, list_report_objects
+from services.report_service import create_report_payload
+from services.color_correction_service import correct_image_bytes
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR.parent / ".env")
@@ -60,6 +62,12 @@ def _sanitize_path_part(value: str, label: str) -> str:
     return value
 
 
+def _sanitize_object_key(value: str) -> str:
+    if not value or value.startswith("/") or ".." in value:
+        raise HTTPException(status_code=400, detail="Invalid object key")
+    return value
+
+
 class SignupRequest(BaseModel):
     name: str
     email: EmailStr
@@ -99,6 +107,38 @@ class ValidateResponse(BaseModel):
     label: str
     reason: str
     object_key: str | None = None
+    corrected_key: str | None = None
+
+
+class GenerateReportRequest(BaseModel):
+    user_id: str
+    test_id: str
+    age: int | None = None
+    gender: str | None = None
+    height_cm: int | None = None
+    weight_kg: int | None = None
+
+
+class GenerateReportResponse(BaseModel):
+    object_key: str
+
+
+class ReportListItem(BaseModel):
+    object_key: str
+    last_modified: str
+
+
+class ReportListResponse(BaseModel):
+    items: list[ReportListItem]
+
+
+class ColorCorrectRequest(BaseModel):
+    object_key: str
+
+
+class ColorCorrectResponse(BaseModel):
+    corrected_key: str
+    content_type: str
 
 
 @app.on_event("startup")
@@ -185,7 +225,27 @@ async def upload_image(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"OSS upload failed: {exc}") from exc
 
-    return ValidateResponse(accepted=True, label=label, reason="Accepted", object_key=object_key)
+    corrected_key = None
+    if label == "urine":
+        try:
+            corrected_bytes, corrected_content_type, ext = correct_image_bytes(
+                content,
+                object_key=object_key,
+                content_type=file.content_type,
+            )
+            obj_path = Path(object_key)
+            corrected_key = str(obj_path.parent / f"{obj_path.stem}_corrected{ext}")
+            upload_bytes(corrected_key, corrected_bytes, corrected_content_type)
+        except Exception:
+            corrected_key = object_key
+
+    return ValidateResponse(
+        accepted=True,
+        label=label,
+        reason="Accepted",
+        object_key=object_key,
+        corrected_key=corrected_key,
+    )
 
 
 @app.post("/analyze/{scan_type}", response_model=AnalyzeResponse)
@@ -194,6 +254,110 @@ def analyze(scan_type: str, payload: AnalyzeRequest) -> AnalyzeResponse:
         raise HTTPException(status_code=400, detail="Invalid scan type")
     result = analyze_health_image(payload.image, scan_type)
     return AnalyzeResponse(**result)
+
+
+@app.post("/generate-report", response_model=GenerateReportResponse)
+def generate_report(payload: GenerateReportRequest) -> GenerateReportResponse:
+    user_id = _sanitize_path_part(payload.user_id, "user_id")
+    test_id = _sanitize_path_part(payload.test_id, "test_id")
+
+    urine_bytes = None
+    candidates = [
+        "urine_corrected.jpg",
+        "urine_corrected.jpeg",
+        "urine_corrected.png",
+        "urine_corrected.webp",
+        "urine.jpg",
+        "urine.jpeg",
+        "urine.png",
+        "urine.webp",
+    ]
+    for name in candidates:
+        object_key = f"{user_id}/{test_id}/upload/{name}"
+        try:
+            urine_bytes, _ = download_bytes(object_key)
+            if urine_bytes:
+                break
+        except Exception:
+            continue
+
+    tongue_bytes = None
+    tongue_candidates = [
+        "tongue_corrected.jpg",
+        "tongue_corrected.jpeg",
+        "tongue_corrected.png",
+        "tongue_corrected.webp",
+        "tongue.jpg",
+        "tongue.jpeg",
+        "tongue.png",
+        "tongue.webp",
+    ]
+    for name in tongue_candidates:
+        object_key = f"{user_id}/{test_id}/upload/{name}"
+        try:
+            tongue_bytes, _ = download_bytes(object_key)
+            if tongue_bytes:
+                break
+        except Exception:
+            continue
+
+    profile = {
+        "age": payload.age,
+        "gender": payload.gender,
+        "height_cm": payload.height_cm,
+        "weight_kg": payload.weight_kg,
+    }
+    report = create_report_payload(
+        urine_bytes=urine_bytes,
+        tongue_bytes=tongue_bytes,
+        user_profile=profile,
+    )
+    content = json.dumps(report, ensure_ascii=False).encode("utf-8")
+    object_key = f"{user_id}/{test_id}/report/report.json"
+
+    try:
+        upload_bytes(object_key, content, "application/json")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"OSS upload failed: {exc}") from exc
+
+    return GenerateReportResponse(object_key=object_key)
+
+
+@app.get("/reports/{user_id}", response_model=ReportListResponse)
+def list_reports(user_id: str) -> ReportListResponse:
+    user_id = _sanitize_path_part(user_id, "user_id")
+    try:
+        items = list_report_objects(user_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"OSS list failed: {exc}") from exc
+    return ReportListResponse(items=[ReportListItem(**item) for item in items])
+
+
+@app.post("/correct-urine-color", response_model=ColorCorrectResponse)
+def correct_urine_color(payload: ColorCorrectRequest) -> ColorCorrectResponse:
+    object_key = _sanitize_object_key(payload.object_key.strip())
+    try:
+        content, content_type = download_bytes(object_key)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"OSS download failed: {exc}") from exc
+
+    try:
+        corrected_bytes, out_content_type, ext = correct_image_bytes(
+            content,
+            object_key=object_key,
+            content_type=content_type,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Color correction failed: {exc}") from exc
+
+    obj_path = Path(object_key)
+    corrected_key = str(obj_path.parent / f"{obj_path.stem}_corrected{ext}")
+    try:
+        upload_bytes(corrected_key, corrected_bytes, out_content_type)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"OSS upload failed: {exc}") from exc
+
+    return ColorCorrectResponse(corrected_key=corrected_key, content_type=out_content_type)
 
 
 @app.get("/overview")
@@ -207,8 +371,17 @@ def get_overview():
 
 @app.get("/report")
 def get_report():
-    file_path = DATA_DIR / "report.json"
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Report data not found")
-    with open(file_path, "r") as f:
-        return json.load(f)
+    raise HTTPException(status_code=400, detail="Missing object_key")
+
+
+@app.get("/report/{object_key:path}")
+def get_report_from_oss(object_key: str):
+    object_key = _sanitize_object_key(object_key)
+    try:
+        content, _ = download_bytes(object_key)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"OSS download failed: {exc}") from exc
+    try:
+        return json.loads(content.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail="Report JSON invalid") from exc

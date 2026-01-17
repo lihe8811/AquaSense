@@ -11,6 +11,23 @@ PROMPT = (
     '{"label":"tongue|urine|other","reason":"short reason"}.'
 )
 
+REPORT_PROMPT = (
+    "You are a hydration analysis assistant. Given report inputs as JSON, "
+    "generate short, clinically cautious text. Use urineAnalysis.metrics and "
+    "urineAnalysis.analysisData to write urineInsight, urineStatus, and urineColorLevel. "
+    "Use tongueAnalysis.metrics and tongueAnalysis.diagnosis to write tongueInsight and tongueStatus. "
+    "Choose the best drink from report.recommendedDrinks and return drinkId and drinkReason. "
+    "Use userProfile "
+    "(age, gender, height_cm, weight_kg) to personalize the tone and advice. "
+    "Reply ONLY with JSON containing keys: "
+    '"hydrationSummaryLevel", "hydrationSummaryStatus", "hydrationSummaryWellnessTip", '
+    '"urineInsight", "urineStatus", "urineColorLevel", '
+    '"tongueInsight", "tongueStatus", "drinkId", "drinkReason". '
+    "The urineInsight should be a very detailed, clinically cautious text. "
+    "Explain what each metric means and how it affects the insight. "
+    "Write the insights in markdown format for readability. The tongueInsight must be markdown."
+)
+
 
 def _extract_json(text: str) -> dict[str, Any]:
     text = text.strip()
@@ -61,3 +78,44 @@ def classify_image(image_bytes: bytes, mime_type: str) -> dict[str, str]:
     if label not in {"tongue", "urine", "other"}:
         label = "other"
     return {"label": label, "reason": reason}
+
+
+def generate_report_text(report_data: dict[str, Any]) -> dict[str, str] | None:
+    api_key = os.getenv("DASHSCOPE_API_KEY", "").strip()
+    if not api_key:
+        return None
+
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+
+    completion = client.chat.completions.create(
+        model="qwen-plus",
+        messages=[
+            {
+                "role": "user",
+                "content": f"{REPORT_PROMPT}\n\nINPUT_JSON:\n{json.dumps(report_data)}",
+            }
+        ],
+        temperature=0.2,
+    )
+
+    content = completion.choices[0].message.content or ""
+    try:
+        parsed = _extract_json(content)
+    except Exception:
+        return None
+
+    return {
+        "hydrationSummaryLevel": parsed.get("hydrationSummaryLevel"),
+        "hydrationSummaryStatus": str(parsed.get("hydrationSummaryStatus", "")),
+        "hydrationSummaryWellnessTip": str(parsed.get("hydrationSummaryWellnessTip", "")),
+        "urineInsight": str(parsed.get("urineInsight", "")),
+        "urineStatus": str(parsed.get("urineStatus", "")),
+        "urineColorLevel": str(parsed.get("urineColorLevel", "")),
+        "tongueInsight": str(parsed.get("tongueInsight", "")),
+        "tongueStatus": str(parsed.get("tongueStatus", "")),
+        "drinkId": str(parsed.get("drinkId", "")),
+        "drinkReason": str(parsed.get("drinkReason", "")),
+    }

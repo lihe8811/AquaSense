@@ -6,3 +6,5 @@ openai
 python-multipart
 oss2
 python-dotenv
+opencv-python-headless
+numpy
