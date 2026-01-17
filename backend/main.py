@@ -8,7 +8,6 @@ import json
 from pathlib import Path
 
 from services.auth_service import hash_password, verify_password
-from services.gemini_service import analyze_health_image
 from services.qwen_service import classify_image
 from services.oss_service import upload_bytes, download_bytes, list_report_objects
 from services.report_service import create_report_payload
@@ -89,17 +88,6 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
-
-
-class AnalyzeRequest(BaseModel):
-    image: str
-
-
-class AnalyzeResponse(BaseModel):
-    status: str
-    description: str
-    markers: list[dict[str, str]]
-    recommendation: str
 
 
 class ValidateResponse(BaseModel):
@@ -246,14 +234,6 @@ async def upload_image(
         object_key=object_key,
         corrected_key=corrected_key,
     )
-
-
-@app.post("/analyze/{scan_type}", response_model=AnalyzeResponse)
-def analyze(scan_type: str, payload: AnalyzeRequest) -> AnalyzeResponse:
-    if scan_type not in {"tongue", "urine"}:
-        raise HTTPException(status_code=400, detail="Invalid scan type")
-    result = analyze_health_image(payload.image, scan_type)
-    return AnalyzeResponse(**result)
 
 
 @app.post("/generate-report", response_model=GenerateReportResponse)
