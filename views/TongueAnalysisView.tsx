@@ -2,30 +2,32 @@ import React, { useRef, useState } from 'react';
 
 interface TongueAnalysisViewProps {
   onNext: () => void;
-  onComplete: () => void;
+  onGenerateReport: () => void;
+  onUploaded: (scanType: 'tongue' | 'urine') => void;
+  scanStatus: { tongue: boolean; urine: boolean };
   startAtResult?: boolean;
   userId?: number;
+  testId: string;
 }
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
-const createTestId = () =>
-  (typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-
 const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({
   onNext,
-  onComplete,
+  onGenerateReport,
+  onUploaded,
+  scanStatus,
   startAtResult,
   userId,
+  testId,
 }) => {
   const [step] = useState<'scan' | 'result'>(startAtResult ? 'result' : 'scan');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const canGenerateReport = scanStatus.tongue && scanStatus.urine;
 
   const handlePickPhoto = () => {
     fileInputRef.current?.click();
@@ -42,8 +44,7 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({
     const formData = new FormData();
     formData.append('file', file);
     formData.append('user_id', String(userId));
-    formData.append('test_id', createTestId());
-    formData.append('scan_type', 'tongue');
+    formData.append('test_id', testId);
 
     const response = await fetch(`${API_URL}/upload-image`, {
       method: 'POST',
@@ -58,6 +59,7 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({
     if (!data.accepted) {
       throw new Error(data.reason || 'Photo must show tongue or urine in toilet.');
     }
+    return data;
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,8 +77,11 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({
     reader.readAsDataURL(file);
 
     try {
-      await uploadAndValidate(file);
-      onComplete();
+      const result = await uploadAndValidate(file);
+      if (result?.label === 'tongue' || result?.label === 'urine') {
+        onUploaded(result.label);
+      }
+      setPreviewUrl(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.');
     } finally {
@@ -93,11 +98,43 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({
         </header>
 
         <main className="flex-1 flex flex-col px-6 pb-24">
+          <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 px-5 py-4 shadow-sm mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Upload Status</p>
+                <p className="text-lg font-bold text-slate-900 dark:text-white">Scan Readiness</p>
+              </div>
+              <span className={`text-xs font-semibold ${canGenerateReport ? 'text-teal-600' : 'text-slate-400'}`}>
+                {canGenerateReport ? 'Ready' : 'Waiting'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-xs font-semibold">
+              <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 px-3 py-2 flex items-center justify-between">
+                <span className="text-slate-500">Tongue</span>
+                <span className={scanStatus.tongue ? 'text-teal-600' : 'text-slate-400'}>
+                  {scanStatus.tongue ? 'Ready' : 'Pending'}
+                </span>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 px-3 py-2 flex items-center justify-between">
+                <span className="text-slate-500">Urine</span>
+                <span className={scanStatus.urine ? 'text-teal-600' : 'text-slate-400'}>
+                  {scanStatus.urine ? 'Ready' : 'Pending'}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={onGenerateReport}
+              disabled={!canGenerateReport}
+              className="mt-4 w-full rounded-2xl bg-primary px-4 py-3 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              Generate Report
+            </button>
+          </div>
           <p className="text-center text-slate-500 mb-6 px-4">
             Upload a clear tongue or urine photo to generate the report.
           </p>
 
-          <div className="relative w-full aspect-[3/4] rounded-[40px] overflow-hidden bg-slate-900 border-4 border-primary/20 shadow-2xl">
+          <div className="relative w-full aspect-[3/5] max-h-[55vh] rounded-[40px] overflow-hidden bg-slate-900 border-4 border-primary/20 shadow-2xl">
             {previewUrl ? (
               <img
                 src={previewUrl}
@@ -105,11 +142,33 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({
                 alt="Upload Preview"
               />
             ) : (
-              <img
-                src="https://picsum.photos/seed/tongue/600/800"
-                className="w-full h-full object-cover opacity-60"
-                alt="Tongue View"
-              />
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-900 via-teal-900 to-sky-900">
+                <div className="absolute inset-0 opacity-30">
+                  <div className="absolute -top-10 left-8 h-40 w-40 rounded-full bg-cyan-400/30 blur-3xl"></div>
+                  <div className="absolute bottom-8 right-8 h-32 w-32 rounded-full bg-emerald-400/30 blur-3xl"></div>
+                </div>
+                <div className="relative z-10 flex flex-col items-center text-center">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="h-10 w-10 rounded-full bg-white/15 border border-white/20 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-white text-xl">sports_handball</span>
+                    </div>
+                    <div className="h-10 w-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-white text-xl">local_drink</span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] uppercase tracking-[0.3em] text-white/70 font-semibold">Hydration Scan</p>
+                  <p className="mt-2 text-sm font-semibold text-white/90 max-w-[220px]">
+                    Check your hydration after your workout.
+                  </p>
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className="text-[10px] text-white/60">Sweat</span>
+                    <span className="h-1 w-1 rounded-full bg-white/40"></span>
+                    <span className="text-[10px] text-white/60">Refuel</span>
+                    <span className="h-1 w-1 rounded-full bg-white/40"></span>
+                    <span className="text-[10px] text-white/60">Recover</span>
+                  </div>
+                </div>
+              </div>
             )}
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-64 h-80 border-2 border-primary/50 rounded-full border-dashed"></div>
@@ -163,6 +222,38 @@ const TongueAnalysisView: React.FC<TongueAnalysisViewProps> = ({
       </header>
 
       <main className="px-6 space-y-8 py-4">
+        <section className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 px-5 py-4 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Upload Status</p>
+              <p className="text-lg font-bold text-slate-900 dark:text-white">Scan Readiness</p>
+            </div>
+            <span className={`text-xs font-semibold ${canGenerateReport ? 'text-teal-600' : 'text-slate-400'}`}>
+              {canGenerateReport ? 'Ready' : 'Waiting'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-xs font-semibold">
+            <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 px-3 py-2 flex items-center justify-between">
+              <span className="text-slate-500">Tongue</span>
+              <span className={scanStatus.tongue ? 'text-teal-600' : 'text-slate-400'}>
+                {scanStatus.tongue ? 'Ready' : 'Pending'}
+              </span>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 px-3 py-2 flex items-center justify-between">
+              <span className="text-slate-500">Urine</span>
+              <span className={scanStatus.urine ? 'text-teal-600' : 'text-slate-400'}>
+                {scanStatus.urine ? 'Ready' : 'Pending'}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onGenerateReport}
+            disabled={!canGenerateReport}
+            className="mt-4 w-full rounded-2xl bg-primary px-4 py-3 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            Generate Report
+          </button>
+        </section>
         <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto no-scrollbar">
           <button className="pb-3 px-4 text-primary border-b-2 border-primary font-bold whitespace-nowrap">Overview</button>
           <button className="pb-3 px-4 text-slate-400 font-medium whitespace-nowrap">Texture</button>

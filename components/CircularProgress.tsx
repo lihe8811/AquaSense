@@ -2,7 +2,7 @@
 import React from 'react';
 
 interface CircularProgressProps {
-  value: number;
+  value: number | null;
   label: string;
   size?: number;
 }
@@ -10,7 +10,9 @@ interface CircularProgressProps {
 const CircularProgress: React.FC<CircularProgressProps> = ({ value, label, size = 128 }) => {
   const radius = 58;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (value / 100) * circumference;
+  const safeValue = value ?? 0;
+  const offset = circumference - (safeValue / 100) * circumference;
+  const displayValue = value == null ? '--' : String(value);
 
   return (
     <div className="text-center">
@@ -26,7 +28,7 @@ const CircularProgress: React.FC<CircularProgressProps> = ({ value, label, size 
             strokeWidth="8"
           />
           <circle
-            className="text-primary transition-all duration-1000 ease-out"
+            className={`${value == null ? 'text-emerald-200' : 'text-primary'} transition-all duration-1000 ease-out`}
             cx="64"
             cy="64"
             fill="transparent"
@@ -38,7 +40,7 @@ const CircularProgress: React.FC<CircularProgressProps> = ({ value, label, size 
             strokeWidth="8"
           />
         </svg>
-        <span className="absolute text-4xl font-bold">{value}</span>
+        <span className="absolute text-4xl font-bold">{displayValue}</span>
       </div>
       <p className="mt-2 text-slate-500 text-sm font-medium">{label}</p>
     </div>
